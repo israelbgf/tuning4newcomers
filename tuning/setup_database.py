@@ -1,43 +1,26 @@
+import itertools
 import os
-from threading import Thread
-from time import sleep
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tuning4newcomers.settings")
-
+import random
+from pycpfcnpj import gen
 import django
 
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tuning4newcomers.settings")
 django.setup()
 
 from mixer.backend.django import mixer
 
-from tuning.models import Empresa, Colaborador, Pedido, ParcelaComissao, DadosEmpresa
+from tuning.models import Empresa, Vendedor, Pedido, Item
 
+for i in range(100):
+    empresa = mixer.blend(Empresa, cnpj=gen.cnpj())
+    print('')
+    print('Criando Empresa {}'.format(empresa.id))
 
-# t1 = Thread(target=lambda: mixer.cycle(30000).blend(Empresa))
-# # t2 = Thread(target=lambda: mixer.cycle(0).blend(Colaborador, empresa=mixer.SELECT))
-# t3 = Thread(target=lambda: mixer.cycle(10000).blend(Pedido, empresa=mixer.SELECT, criador=mixer.SELECT))
-# t4 = Thread(target=lambda: mixer.cycle(1000).blend(ParcelaComissao, empresa=Empresa.objects.get(id=100), pedido=(pedido for pedido in Pedido.objects.filter(empresa_id=100)),
-#                                                     colaborador=mixer.SELECT))
+    vendedores = mixer.cycle(random.randint(1, 30)).blend(Vendedor, empresa=empresa)
 
-
-def loading():
-    while True:
-        print 'Loading...'
-        # print(Empresa, Empresa.objects.all().count())
-        # print(Pedido, Pedido.objects.all().count())
-        # print(ParcelaComissao, ParcelaComissao.objects.all().count())
-        # print(Colaborador, Colaborador.objects.all().count())
-        print(DadosEmpresa, DadosEmpresa.objects.all().count())
-        sleep(2)
-
-
-t5 = Thread(target=loading)
-t5.start()
-#
-# t1.start()
-# # t2.start()
-# # t3.start()
-# t4.start()
-
-
-mixer.cycle(12000).blend(DadosEmpresa, empresa=mixer.SELECT)
+    vendedores_pool = itertools.cycle(vendedores)
+    for j in range(200):
+        pedido = mixer.blend(Pedido, empresa=empresa, vendedor=next(vendedores_pool))
+        print('Criando Pedido {}'.format(pedido.id))
+        items = mixer.cycle(random.randint(1, 50)).blend(Item, pedido=pedido)

@@ -1,86 +1,22 @@
 use tuning;
 
-# ALL = Full Table Scan | Nem sempre é algo ruim (mas 99% das vezes é).
-# Rows = Quantos registros serão retornados (estimativa no caso do InnoDB)
-explain select * from tuning_pedido;
 
-# Ref = A coluna que foi utiliza para utilizar o índice.
-# type = descreve como tabelas são "joinadas"
-explain select * from tuning_pedido where empresa_id = 27;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Lendo a estimativa de rows e ordem de execução.
-explain select empresa.nome, colaborador.nome
-        from tuning_empresa empresa
-               join tuning_colaborador colaborador on empresa.id = colaborador.empresa_id
-        where empresa.id between 20 and 70;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Removendo o custo de Ordenação e do Distinct. Consulta problemática:
-EXPLAIN SELECT  `tuning_pedido`.`id`,
-       `tuning_pedido`.`criador_id`,
-       `tuning_pedido`.`total`,
-       `tuning_pedido`.`status`,
-       `tuning_pedido`.`numero`,
-       `tuning_colaborador`.`id`,
-       `tuning_colaborador`.`nome`
-FROM `tuning_pedido` use index(`idx_empresa_id_data_emissao_numero`)
-       INNER JOIN `tuning_colaborador` ON (`tuning_pedido`.`criador_id` = `tuning_colaborador`.`id`)
-       LEFT OUTER JOIN `tuning_parcelacomissao` ON (`tuning_pedido`.`id` = `tuning_parcelacomissao`.`pedido_id`)
+# Consulta problemática com ordenação e distinct:
+EXPLAIN SELECT DISTINCT pedido.id,
+       pedido.vendedor_id,
+       pedido.total,
+       pedido.status,
+       pedido.numero,
+       vendedor.id,
+       vendedor.nome
+FROM tuning_pedido pedido
+       JOIN tuning_vendedor vendedor ON (pedido.vendedor_id = vendedor.id)
+       JOIN tuning_item item ON (pedido.id = item.pedido_id)
 WHERE
-      `tuning_pedido`.`status` IN ('1', '2')
-      AND (`tuning_pedido`.`criador_id` IN (51) OR `tuning_parcelacomissao`.`colaborador_id` = 50)
-      AND `tuning_pedido`.`empresa_id` = 100
-ORDER BY `tuning_pedido`.`data_emissao` DESC, `tuning_pedido`.`numero` DESC; -- Ordenação, é um problema?
-
-
--- Vendo os indices
-show indexes from tuning_pedido;
-
--- EXPLAIN é só estimativas! Nem tudo é o que parece.
-select count(*) from tuning_pedido where empresa_id = 100;
-select * from tuning_parcelacomissao where pedido_id = 7;
+      pedido.status IN ('1', '2')
+      AND (pedido.vendedor_id IN (576, 577) OR item.percentual_desconto > 0.2)
+      AND pedido.empresa_id = 44
+ORDER BY pedido.data_emissao DESC, pedido.numero DESC;
 
 
 
@@ -90,24 +26,8 @@ select * from tuning_parcelacomissao where pedido_id = 7;
 
 
 
--- Consulta Fixada
-EXPLAIN SELECT `tuning_pedido`.`id`,
-       `tuning_pedido`.`criador_id`,
-       `tuning_pedido`.`total`,
-       `tuning_pedido`.`status`,
-       `tuning_pedido`.`numero`,
-       `tuning_colaborador`.`id`,
-       `tuning_colaborador`.`nome`
-FROM `tuning_pedido` FORCE INDEX (idx_empresa_id_data_emissao_numero)
-       INNER JOIN `tuning_colaborador` ON (`tuning_pedido`.`criador_id` = `tuning_colaborador`.`id`)
-WHERE (`tuning_pedido`.`status` IN ('1', '2') AND
-       (`tuning_pedido`.`criador_id` IN (51) OR exists(select id
-                                                           from tuning_parcelacomissao
-                                                           where colaborador_id = 50
-                                                             and `tuning_parcelacomissao`.pedido_id = `tuning_pedido`.id
-                                                           limit 1)) AND
-       `tuning_pedido`.`empresa_id` = 100)
-ORDER BY `tuning_pedido`.`data_emissao` DESC, `tuning_pedido`.`numero` DESC;
+alter table tuning_pedido add index idx_bala_de_prata(empresa_id, status, data_emissao, numero);
+alter table tuning_pedido drop index idx_bala_de_prata;
 
 
 
@@ -134,48 +54,82 @@ ORDER BY `tuning_pedido`.`data_emissao` DESC, `tuning_pedido`.`numero` DESC;
 
 
 
--- Consulta utilizando coalesce (ou qualquer função que gere algo dinâmico)
-explain SELECT (coalesce(data_emissao, '2018-11-05 00:14:18.805381')) AS `data_emissao_sem_null`,
-       `tuning_pedido`.`id`,
-       `tuning_pedido`.`criador_id`,
-       `tuning_pedido`.`total`,
-       `tuning_pedido`.`status`,
-       `tuning_pedido`.`numero`,
-       `tuning_colaborador`.`id`,
-       `tuning_colaborador`.`nome`
-FROM `tuning_pedido` use index (idx_empresa_id_data_emissao_numero)
-       INNER JOIN `tuning_colaborador` ON (`tuning_pedido`.`criador_id` = `tuning_colaborador`.`id`)
-WHERE (`tuning_pedido`.`status` IN ('1', '2') AND `tuning_pedido`.`empresa_id` = 100)
-ORDER BY `data_emissao_sem_null` DESC, `tuning_pedido`.`numero` DESC;
 
 
 
 
 
 
-
-
-
--- Cuidado com Likes!
-explain select *
-        from tuning_empresa
-        where email like '%angela%';
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Respeite a ordem e cuide de sua projeção!
+-- Consulta Fixada... Ou não?
 SET profiling = 1;
-explain select empresa_id, data_emissao, numero from tuning_pedido where empresa_id = 100 order by data_emissao, numero;
+
+EXPLAIN SELECT pedido.id,
+               pedido.vendedor_id,
+               pedido.total,
+               pedido.status,
+               pedido.numero,
+               vendedor.id,
+               vendedor.nome
+        FROM tuning_pedido pedido
+               JOIN tuning_vendedor vendedor ON (pedido.vendedor_id = vendedor.id)
+        WHERE (pedido.status IN ('1', '2') AND
+               (pedido.vendedor_id IN (576, 577) OR exists(select id
+                                                     from tuning_item
+                                                     where percentual_desconto > 0.2
+                                                       and tuning_item.pedido_id = pedido.id
+                                                     limit 1)) AND
+               pedido.empresa_id = 44)
+        ORDER BY pedido.data_emissao DESC, pedido.numero DESC;
+
 SET profiling = 0;
-SHOW PROFILES;
-SHOW PROFILE ALL FOR QUERY 92;
+SHOW profiles;
+SHOW PROFILE ALL FOR QUERY 245;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+alter table tuning_item add index idx_bala_de_prata(pedido_id, percentual_desconto);
+alter table tuning_item drop index idx_bala_de_prata;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
