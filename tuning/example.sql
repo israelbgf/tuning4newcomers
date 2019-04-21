@@ -24,10 +24,10 @@ ORDER BY pedido.data_emissao DESC, pedido.numero DESC;
 
 
 
+alter table tuning_pedido add index idx_bala_de_prata(empresa_id, data_emissao, numero);
 
-
-alter table tuning_pedido add index idx_bala_de_prata(empresa_id, status, data_emissao, numero);
-alter table tuning_pedido drop index idx_bala_de_prata;
+# alter table tuning_pedido drop index idx_bala_de_prata;
+# analyze table tuning_pedido;
 
 
 
@@ -72,18 +72,18 @@ EXPLAIN SELECT pedido.id,
                vendedor.nome
         FROM tuning_pedido pedido
                JOIN tuning_vendedor vendedor ON (pedido.vendedor_id = vendedor.id)
-        WHERE (pedido.status IN ('1', '2') AND
+        WHERE pedido.status IN ('1', '2') AND
                (pedido.vendedor_id IN (576, 577) OR exists(select id
                                                      from tuning_item
                                                      where percentual_desconto > 0.2
                                                        and tuning_item.pedido_id = pedido.id
                                                      limit 1)) AND
-               pedido.empresa_id = 44)
+               pedido.empresa_id = 44
         ORDER BY pedido.data_emissao DESC, pedido.numero DESC;
 
 SET profiling = 0;
 SHOW profiles;
-SHOW PROFILE ALL FOR QUERY 245;
+SHOW PROFILE ALL FOR QUERY 15;
 
 
 
