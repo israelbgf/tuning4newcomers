@@ -26,8 +26,6 @@ ORDER BY pedido.data_emissao DESC, pedido.numero DESC;
 
 alter table tuning_pedido add index idx_bala_de_prata(empresa_id, data_emissao, numero);
 
-# alter table tuning_pedido drop index idx_bala_de_prata;
-# analyze table tuning_pedido;
 
 
 
@@ -83,26 +81,7 @@ EXPLAIN SELECT pedido.id,
 
 SET profiling = 0;
 SHOW profiles;
-SHOW PROFILE ALL FOR QUERY 15;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-alter table tuning_item add index idx_bala_de_prata(pedido_id, percentual_desconto);
-alter table tuning_item drop index idx_bala_de_prata;
+SHOW PROFILE ALL FOR QUERY 38;
 
 
 
@@ -123,13 +102,5 @@ alter table tuning_item drop index idx_bala_de_prata;
 
 
 
-
-
-
-
-
-
-
-
-
-
+alter table tuning_pedido drop index idx_bala_de_prata;
+analyze table tuning_pedido;
